@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SMS Scam Detector</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #222;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 220px;
+            padding: 14px;
+            font: inherit;
+            resize: vertical;
+        }
+
+        button {
+            margin-top: 12px;
+            padding: 12px 20px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        #status {
+            margin-top: 16px;
+        }
+
+        #results {
+            display: grid;
+            grid-template-columns: repeat(
+                auto-fit,
+                minmax(320px, 1fr)
+            );
+            gap: 20px;
+            margin-top: 28px;
+        }
+
+        .model-card {
+            min-width: 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .model-card h2 {
+            margin-top: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .section {
+            margin-top: 24px;
+        }
+
+        .section h3 {
+            margin-bottom: 8px;
+        }
+
+        .argument {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .assessment {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #ddd;
+        }
+
+        .verdict {
+            font-size: 26px;
+            font-weight: bold;
+        }
+
+        .warning {
+            padding-left: 20px;
+        }
+
+        .disclaimer {
+            margin-top: 30px;
+            padding-top: 16px;
+            border-top: 1px solid #ddd;
+            font-size: 14px;
+        }
+
+        .error {
+            color: #b00020;
+        }
+
+        .muted {
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>SMS Pig-Butchering Scam Detector</h1>
+
+    <p>
+        Paste an SMS conversation between two people.
+        Each configured AI model independently evaluates the
+        conversation using a prosecutor, defense, and judge.
+    </p>
+
+    <h2>Models being evaluated</h2>
+
+    <ul>
+        {% for model in models %}
+        <li>{{ model }}</li>
+        {% endfor %}
+    </ul>
+
+    <h2>SMS conversation</h2>
+
+    <p class="muted">
+        Include the available conversation in chronological order.
+        You can replace names and phone numbers with placeholders.
+    </p>
+
+    <textarea
+        id="inputText"
+        maxlength="12000"
+        placeholder="[Person A]: Hey, how was your day?
+[Person B]: It was good. How about yours?
+[Person A]: ..."
+    ></textarea>
+
+    <br>
+
+    <button id="analyzeButton" onclick="analyze()">
+        Analyze conversation
+    </button>
+
+    <p id="status" role="status" aria-live="polite"></p>
+
+    <section id="results"></section>
+
+    <div class="disclaimer">
+        <strong>Important:</strong>
+        This tool provides an automated assessment, not a verified
+        determination of fraud. A NO verdict does not establish that
+        a conversation is safe. Do not send money or disclose sensitive
+        information solely on the basis of an AI assessment.
+    </div>
+
+    <script>
+        async function analyze() {
+            const text = document
+                .getElementById("inputText")
+                .value.trim();
+
+            const button = document.getElementById("analyzeButton");
+            const status = document.getElementById("status");
+            const results = document.getElementById("results");
+
+            if (!text) {
+                status.textContent =
+                    "Please enter an SMS conversation.";
+                return;
+            }
+
+            button.disabled = true;
+            status.textContent =
+                "Analyzing the conversation with all configured models...";
+
+            results.replaceChildren();
+
+            try {
+                const response = await fetch("/analyze", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ text })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.error || "Analysis failed."
+                    );
+                }
+
+                for (const result of data.results) {
+                    results.appendChild(createModelCard(result));
+                }
+
+                const successful = data.results.filter(
+                    result => result.verdict !== null
+                ).length;
+
+                status.textContent =
+                    `Completed ${successful} of ` +
+                    `${data.results.length} model assessments.`;
+
+            } catch (error) {
+                status.textContent = error.message;
+
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        function createModelCard(result) {
+            const card = document.createElement("article");
+            card.className = "model-card";
+
+            const title = document.createElement("h2");
+            title.textContent = result.model;
+            card.appendChild(title);
+
+            if (result.error) {
+                const error = document.createElement("p");
+                error.className = "error";
+                error.textContent = result.error;
+                card.appendChild(error);
+                return card;
+            }
+
+            addSection(
+                card,
+                "Prosecutor's analysis",
+                result.prosecutor
+            );
+
+            addSection(
+                card,
+                "Defense's analysis",
+                "[Redacted]" // result.defense
+            );
+
+            const assessment = document.createElement("section");
+            assessment.className = "assessment";
+
+            const verdict = document.createElement("div");
+            verdict.className = "verdict";
+            verdict.textContent = `Scam verdict: ${result.verdict}`;
+
+            assessment.appendChild(verdict);
+
+            addText(
+                assessment,
+                "Risk level",
+                result.risk_level
+            );
+
+            addText(
+                assessment,
+                "Classification confidence",
+                result.confidence
+            );
+
+            addText(
+                assessment,
+                "Explanation",
+                result.explanation
+            );
+
+            const warningTitle = document.createElement("h3");
+            warningTitle.textContent = "Warning signs";
+            assessment.appendChild(warningTitle);
+
+            if (
+                !result.warning_signs ||
+                result.warning_signs.length === 0
+            ) {
+                const none = document.createElement("p");
+                none.textContent =
+                    "No specific warning signs were identified.";
+                assessment.appendChild(none);
+            } else {
+                const list = document.createElement("ul");
+                list.className = "warning";
+
+                for (const warning of result.warning_signs) {
+                    const item = document.createElement("li");
+                    item.textContent = warning;
+                    list.appendChild(item);
+                }
+
+                assessment.appendChild(list);
+            }
+
+            card.appendChild(assessment);
+
+            return card;
+        }
+
+        function addSection(card, heading, content) {
+            const section = document.createElement("section");
+            section.className = "section";
+
+            const title = document.createElement("h3");
+            title.textContent = heading;
+
+            const body = document.createElement("div");
+            body.className = "argument";
+            body.textContent = content || "";
+
+            section.appendChild(title);
+            section.appendChild(body);
+
+            card.appendChild(section);
+        }
+
+        function addText(parent, label, value) {
+            const section = document.createElement("section");
+            section.className = "section";
+
+            const title = document.createElement("h3");
+            title.textContent = label;
+
+            const body = document.createElement("p");
+            body.textContent = value || "Not available.";
+
+            section.appendChild(title);
+            section.appendChild(body);
+
+            parent.appendChild(section);
+        }
+    </script>
+</body>
+</html>
