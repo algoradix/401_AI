@@ -58,9 +58,9 @@ GROQ_API_KEY=your_groq_key
 
 # Model Configuration
 OPENAI_MODELS=gpt-5-mini
-ANTHROPIC_MODELS=claude-sonnet-4-5
+ANTHROPIC_MODELS=claude-sonnet-5-5
 GEMINI_MODELS=gemini-2.5-flash
-GROQ_MODELS=openai/gpt-oss-20b
+GROQ_MODELS=qwen/qwen3.8-27b
 ```
 
 
